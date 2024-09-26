@@ -66,7 +66,7 @@ main(){
     quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
     dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
     "$mkfs_cmd" "$quota_fs"
-    mount -o loop,rw,usrquota,grpquota "$quota_fs" "$mountpoint"
+    mount -o loop,rw,usrquota,grpquota,uid=$(stat -c %u "$mountpoint"),gid=$(stat -c %g "$mountpoint") "$quota_fs" "$mountpoint"
     
     chmod 0770 "$mountpoint"
     echo "$quota_fs" "$mountpoint" ext4 loop 0 0 >> /etc/fstab
