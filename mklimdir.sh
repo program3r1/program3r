@@ -66,11 +66,15 @@ main(){
     quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
     dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
     "$mkfs_cmd" "$quota_fs"
+    # Preserve the original owner, group, and permissions
     original_owner=$(stat -c %u:%g "$mountpoint")
+    original_permissions=$(stat -c %a "$mountpoint")
+    
     mount -o loop,rw,usrquota,grpquota "$quota_fs" "$mountpoint"
     
     chown "$original_owner" "$mountpoint"
-    chmod 0770 "$mountpoint"
+    chmod "$original_permissions" "$mountpoint"
+    
     echo "$quota_fs" "$mountpoint" ext4 loop 0 0 >> /etc/fstab
 
 }
