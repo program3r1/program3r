@@ -66,7 +66,7 @@ main(){
     quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
     dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
     "$mkfs_cmd" "$quota_fs"
-    mount -o loop,rw,usrquota,grpquota,uid=$(stat -c %u "$mountpoint"),gid=$(stat -c %g "$mountpoint") "$quota_fs" "$mountpoint"
+    mount -o loop,rw,usrquota,grpquota "$quota_fs" "$mountpoint"
     # Preserve the original owner and group
     original_owner=$(stat -c %u:%g "$mountpoint")
     chown "$original_owner" "$mountpoint"
