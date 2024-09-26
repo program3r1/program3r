@@ -67,7 +67,8 @@ main(){
     dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
     "$mkfs_cmd" "$quota_fs"
     mount -o loop,rw,usrquota,grpquota "$quota_fs" "$mountpoint"
-
+    
+    chmod 0770 "$mountpoint"
     echo "$quota_fs" "$mountpoint" ext4 loop 0 0 >> /etc/fstab
 
 }
