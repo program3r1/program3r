@@ -1,62 +1,63 @@
 #!/usr/bin/env bash
-# Author: Serg Kolo
-# Date: June 1, 2018
-# Written for: https://askubuntu.com/q/1043035/295286
-# Based on: https://www.linuxquestions.org/questions/linux-server-73/directory-quota-601140/
+# Автор: Program3r
+# Дата: 27 вересня 2025 року
 
 set -e
 
 print_usage(){
-
 cat <<EOF
-Usage: sudo mklimdir.sh -m <Mountpoint Directory> -f <Filesystem> -s <INT>
+Використання: sudo mklimdir.sh -m <Каталог монтування> -f <Файлова система> -s <РОЗМІР>
 
--m directory
--f filesystem type (one of supported by mke2fs)
--s size in bytes
--h this message
+-m каталог
+-f тип файлової системи (один із підтримуваних mke2fs)
+-s розмір у байтах
+-h це повідомлення
 
-Exit statuses:
-0:
-1: Invalid option
-2: Missing argument
-3: No args
-4: root privillege required
+Коди завершення:
+0: Успішно
+1: Невірний параметр
+2: Відсутній аргумент
+3: Немає аргументів
+4: Потрібні права root
 EOF
 } > /dev/stderr
 
+check_command(){
+    command -v "$1" >/dev/null 2>&1 || { echo ">>> Команда $1 не знайдена. Будь ласка, встановіть її." >&2; exit 1; }
+}
+
 parse_args(){
-    #set -x
-
     option_handler(){
-
         case ${opt} in
             m) mountpoint=$( realpath -e "${OPTARG}" );;
             s) size=${OPTARG} ;;
             h) print_usage; exit 0 ;;
             f) mkfs_cmd=mkfs."${OPTARG}" ;;
-            \?) echo ">>>Invalid option: -$OPTARG" > /dev/stderr; exit 1;;
-            \:) echo ">>>Missing argument to -${OPTARG}" > /dev/stderr; exit 2;;
+            \?) echo ">>> Невірний параметр: -$OPTARG" > /dev/stderr; exit 1;;
+            \:) echo ">>> Відсутній аргумент для -${OPTARG}" > /dev/stderr; exit 2;;
         esac
     }
 
     local OPTIND opt
-    getopts "m:s:f:h" opt || { echo "No args passed">/dev/stderr;print_usage;exit 3;}
+    getopts "m:s:f:h" opt || { echo "Немає переданих аргументів">/dev/stderr;print_usage;exit 3;}
     option_handler 
     while getopts "m:s:f:h" opt; do
          option_handler
     done
     shift $((OPTIND-1))
-
 }
 
-
 main(){
-
     if [ $EUID -ne 0 ]; then
-        echo ">>> Please run the script with sudo/as root" > /dev/stderr
+        echo ">>> Будь ласка, запустіть скрипт з правами sudo/як root" > /dev/stderr
         exit 4
     fi
+
+    # Перевірка наявності необхідних команд
+    check_command dd
+    check_command mkfs
+    check_command mount
+    check_command stat
 
     local mountpoint=""
     local size=0
@@ -66,7 +67,8 @@ main(){
     quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
     dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
     "$mkfs_cmd" "$quota_fs"
-    # Preserve the original owner, group, and permissions
+    
+    # Збереження оригінального власника, групи та прав доступу
     original_owner=$(stat -c %u:%g "$mountpoint")
     original_permissions=$(stat -c %a "$mountpoint")
     
@@ -77,6 +79,7 @@ main(){
     
     echo "$quota_fs" "$mountpoint" ext4 loop 0 0 >> /etc/fstab
 
+    echo ">>> Каталог з квотою успішно створено та змонтовано."
 }
 
 main "$@"
