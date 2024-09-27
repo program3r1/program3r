@@ -65,7 +65,8 @@ main(){
 
     parse_args "$@"
     quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
-    dd if=/dev/zero of="$quota_fs" bs=1GiB count=$((size / 1GiB))
+    # Використання fallocate для створення файлу
+    fallocate -l "${size}" "$quota_fs"
     "$mkfs_cmd" "$quota_fs"
     
     # Збереження оригінального власника, групи та прав доступу
