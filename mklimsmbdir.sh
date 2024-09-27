@@ -30,32 +30,42 @@ check_command(){
 }
 
 parse_args(){
-    option_handler(){
+    local OPTIND opt
+    while getopts "m:s:f:g:h" opt; do
         case ${opt} in
             m) mountpoint=$( realpath -e "${OPTARG}" );;
             s) size=${OPTARG} ;;
             g) group=${OPTARG} ;;
             h) print_usage; exit 0 ;;
             f) mkfs_cmd=mkfs."${OPTARG}" ;;
-            \?) log ">>> Невірний параметр: -$OPTARG" > /dev/stderr; exit 1;;
-            \:) log ">>> Відсутній аргумент для -${OPTARG}" > /dev/stderr; exit 2;;
+            \?) log ">>> Невірний параметр: -$OPTARG" > /dev/stderr; exit 1 ;;
+            \:) log ">>> Відсутній аргумент для -${OPTARG}" > /dev/stderr; exit 2 ;;
         esac
-    }
-
-    local OPTIND opt
-    getopts "m:s:f:g:h" opt || { log "Немає переданих аргументів">/dev/stderr;print_usage;exit 3;}
-    option_handler 
-    while getopts "m:s:f:g:h" opt; do
-         option_handler
     done
     shift $((OPTIND-1))
+
+    if [[ -z "$mountpoint" || -z "$size" || -z "$group" || -z "$mkfs_cmd" ]]; then
+        log ">>> Усі параметри повинні бути вказані." > /dev/stderr
+        print_usage
+        exit 2
+    fi
+}
+
+validate_size(){
+    if [[ "$size" =~ ^[0-9]+GiB$ ]]; then
+        size_bytes=$(( ${size%GiB} * 1024 * 1024 * 1024 ))
+    elif [[ "$size" =~ ^[0-9]+$ ]]; then
+        size_bytes=$size
+    else
+        log ">>> Розмір повинен бути позитивним цілим числом або закінчуватися на GiB." > /dev/stderr
+        exit 1
+    fi
 }
 
 install_samba(){
     check_command apt-get
     log ">>> Встановлення Samba..."
-    apt-get update
-    apt-get install -y samba
+    apt-get update && apt-get install -y samba || { log ">>> Не вдалося встановити Samba." >&2; exit 1; }
 }
 
 create_group_and_directory(){
@@ -69,59 +79,68 @@ create_group_and_directory(){
 configure_samba(){
     log ">>> Налаштування Samba..."
     smb_conf="/etc/samba/smb.conf"
+    cp "$smb_conf" "$smb_conf.bak" # Резервне копіювання існуючої конфігурації
     share_name=$(basename "$mountpoint")
-    cat <<EOF >> "$smb_conf"
+    {
+        echo "[$share_name]"
+        echo "   path = $mountpoint"
+        echo "   browseable = yes"
+        echo "   read only = no"
+        echo "   valid users = @$group"
+    } >> "$smb_conf"
+    systemctl restart smbd || { log ">>> Не вдалося перезапустити Samba." >&2; exit 1; }
+}
 
-[$share_name]
-   path = $mountpoint
-   browseable = yes
-   read only = no
-   valid users = @${group}
-EOF
-    systemctl restart smbd
+create_users(){
+    read -p "Скільки користувачів ви хочете створити для групи $group? " user_count
+    for ((i = 1; i <= user_count; i++)); do
+        read -p "Введіть ім'я користувача $i: " username
+        useradd -M -s /sbin/nologin "$username" || log ">>> Не вдалося створити користувача $username."
+        read -sp "Введіть пароль для $username: " password
+        echo
+        echo "$username:$password" | chpasswd
+        smbpasswd -a "$username" <<< "$password" || log ">>> Не вдалося додати користувача $username до Samba."
+        usermod -aG "$group" "$username"
+        log ">>> Користувач $username успішно створений і доданий до групи $group."
+    done
 }
 
 main(){
     if [ $EUID -ne 0 ]; then
-        log ">>> Будь ласка, запустіть скрипт з правами sudo/як root" > /dev/stderr
+        log ">>> Будь ласка, запустіть скрипт з правами sudo/як root." > /dev/stderr
         exit 4
     fi
 
-    # Перевірка наявності необхідних команд
     check_command dd
     check_command mkfs
     check_command mount
     check_command stat
 
-    local mountpoint=""
-    local size=0
-    local mkfs_cmd
-    local group=""
-
     parse_args "$@"
+    validate_size
     install_samba
     create_group_and_directory
-    
-    quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
+
+    quota_fs="/${mountpoint//\//_}_$(date +%s).quota"
     log ">>> Створення файлу квоти..."
-    dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
+    dd if=/dev/zero of="$quota_fs" count=1 bs="$size_bytes" || { log ">>> Не вдалося створити файл квоти." >&2; exit 1; }
     log ">>> Створення файлової системи..."
     "$mkfs_cmd" "$quota_fs"
-    
-    # Збереження оригінального власника, групи та прав доступу
+
     original_owner=$(stat -c %u:%g "$mountpoint")
     original_permissions=$(stat -c %a "$mountpoint")
-    
+
     log ">>> Монтування файлової системи з квотою..."
-    mount -o loop,rw,usrquota,grpquota "$quota_fs" "$mountpoint"
-    
+    mount -o loop,rw,usrquota,grpquota "$quota_fs" "$mountpoint" || { log ">>> Не вдалося змонтувати файлову систему." >&2; exit 1; }
+
     chown "$original_owner" "$mountpoint"
     chmod "$original_permissions" "$mountpoint"
-    
+
     log ">>> Додавання запису до /etc/fstab..."
-    echo "$quota_fs" "$mountpoint" ext4 loop 0 0 >> /etc/fstab
+    echo "$quota_fs $mountpoint ext4 loop 0 0" >> /etc/fstab
 
     configure_samba
+    create_users
 
     log ">>> Каталог з квотою успішно створено, змонтовано та додано до конфігурації Samba."
 }
