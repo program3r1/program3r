@@ -149,7 +149,7 @@ main(){
 
     quota_fs="/${mountpoint//\//_}_$(date +%s).quota"
     log ">>> Створення файлу квоти..."
-    dd if=/dev/zero of="$quota_fs" count=1 bs="$size_bytes" || { log ">>> Не вдалося створити файл квоти." >&2; exit 1; }
+    fallocate -l "$size_bytes" "$quota_fs" || { log ">>> Не вдалося створити файл квоти." >&2; exit 1; }
     log ">>> Створення файлової системи..."
     "$mkfs_cmd" "$quota_fs"
 
