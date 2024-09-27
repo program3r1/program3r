@@ -56,12 +56,12 @@ parse_args(){
 
 validate_size(){
     if [[ "$size" =~ ^[0-9]+GiB$ ]]; then
-        size_bytes=$(( ${size%GiB} * 1024 * 1024 * 1024 ))
+        return 0  # Успішно, розмір у правильному форматі
     elif [[ "$size" =~ ^[0-9]+$ ]]; then
-        size_bytes=$size
+        return 0  # Успішно, розмір є позитивним цілим числом
     else
         log ">>> Розмір повинен бути позитивним цілим числом або закінчуватися на GiB." > /dev/stderr
-        exit 1
+        exit 1  # Завершити скрипт з кодом помилки
     fi
 }
 
@@ -136,7 +136,7 @@ main(){
         exit 4
     fi
 
-    check_command dd
+    check_command fallocate 
     check_command mkfs
     check_command mount
     check_command stat
@@ -149,7 +149,7 @@ main(){
 
     quota_fs="/${mountpoint//\//_}_$(date +%s).quota"
     log ">>> Створення файлу квоти..."
-    fallocate -l "$size_bytes" "$quota_fs" || { log ">>> Не вдалося створити файл квоти." >&2; exit 1; }
+    fallocate -l "$size" "$quota_fs" || { log ">>> Не вдалося створити файл квоти." >&2; exit 1; }
     log ">>> Створення файлової системи..."
     "$mkfs_cmd" "$quota_fs"
 
