@@ -65,7 +65,7 @@ main(){
 
     parse_args "$@"
     quota_fs=/"${mountpoint//\//_}"_"$(date +%s)".quota
-    dd if=/dev/zero of="$quota_fs" count=1 bs="$size"
+    dd if=/dev/zero of="$quota_fs" bs=1GiB count=$((size / 1GiB))
     "$mkfs_cmd" "$quota_fs"
     
     # Збереження оригінального власника, групи та прав доступу
