@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Автор: Serg Kolo
-# Дата: 1 червня 2018 року
-# Написано для: https://askubuntu.com/q/1043035/295286
-# На основі: https://www.linuxquestions.org/questions/linux-server-73/directory-quota-601140/
 
 set -e
 
@@ -16,7 +12,7 @@ cat <<EOF
 
 -m каталог
 -f тип файлової системи (один із підтримуваних mke2fs)
--s розмір у байтах
+-s розмір у байтах (або у гігабайтах тоді закінчення GiB)
 -g назва групи
 -h це повідомлення
 
