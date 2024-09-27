@@ -62,6 +62,12 @@ validate_size(){
     fi
 }
 
+install_expect(){
+    check_command apt-get
+    log ">>> Встановлення expect..."
+    apt-get update && apt-get install -y expect || { log ">>> Не вдалося встановити expect." >&2; exit 1; }
+}
+
 install_samba(){
     check_command apt-get
     log ">>> Встановлення Samba..."
@@ -79,7 +85,6 @@ create_group_and_directory(){
     chmod 0770 "$mountpoint"
 }
 
-
 configure_samba(){
     log ">>> Налаштування Samba..."
     smb_conf="/etc/samba/smb.conf"
@@ -95,6 +100,19 @@ configure_samba(){
     systemctl restart smbd || { log ">>> Не вдалося перезапустити Samba." >&2; exit 1; }
 }
 
+create_user_smb(){
+    log ">>> Створення користувача $1 для Samba..."
+    
+    expect << EOF
+spawn smbpasswd -a "$1"
+expect "New SMB password:"
+send "$2\r"
+expect "Retype new SMB password:"
+send "$2\r"
+expect eof
+EOF
+}
+
 create_users(){
     read -p "Скільки користувачів ви хочете створити для групи $group? " user_count
     for ((i = 1; i <= user_count; i++)); do
@@ -103,7 +121,7 @@ create_users(){
         read -sp "Введіть пароль для $username: " password
         echo
         echo "$username:$password" | chpasswd
-        smbpasswd -a "$username" <<< "$password" || log ">>> Не вдалося додати користувача $username до Samba."
+        create_user_smb "$username" "$password" || log ">>> Не вдалося додати користувача $username до Samba."
         usermod -aG "$group" "$username"
         log ">>> Користувач $username успішно створений і доданий до групи $group."
     done
@@ -122,6 +140,7 @@ main(){
 
     parse_args "$@"
     validate_size
+    install_expect  # Встановлюємо expect перед його використанням
     install_samba
     create_group_and_directory
 
