@@ -33,7 +33,7 @@ parse_args(){
     local OPTIND opt
     while getopts "m:s:f:g:h" opt; do
         case ${opt} in
-            m) mountpoint=$( realpath -e "${OPTARG}" );;
+            m) mountpoint="${OPTARG}" ;;  # Не викликаємо realpath до створення директорії
             s) size=${OPTARG} ;;
             g) group=${OPTARG} ;;
             h) print_usage; exit 0 ;;
@@ -71,10 +71,14 @@ install_samba(){
 create_group_and_directory(){
     log ">>> Створення групи та директорії..."
     groupadd "$group" || log ">>> Група $group вже існує"
-    mkdir -p "$mountpoint"
+
+    mkdir -p "$mountpoint"  # Створюємо директорію тут
+    mountpoint=$( realpath -e "$mountpoint" )  # Викликаємо realpath після створення
+
     chgrp "$group" "$mountpoint"
     chmod 0770 "$mountpoint"
 }
+
 
 configure_samba(){
     log ">>> Налаштування Samba..."
